@@ -1836,6 +1836,16 @@ class Scheduler(
         return GetWeightsByNameReqOutput(parameter)
 
     def release_memory_occupation(self, recv_req: ReleaseMemoryOccupationReqInput):
+        # Check if memory saver is enabled before proceeding
+        if not self.server_args.enable_memory_saver:
+            logger.warning(
+                "`release_memory_occupation` called but memory saver is not enabled. Skipping state export."
+            )
+            # Optionally still flush cache if desired, but logs indicate it might fail if requests are running.
+            # self.flush_cache() # Consider if this flush is needed when saver is off
+            return ReleaseMemoryOccupationReqOutput()
+
+        # Original logic only runs if memory saver is enabled
         self.memory_saver_adapter.check_validity(
             caller_name="release_memory_occupation"
         )
@@ -1847,13 +1857,60 @@ class Scheduler(
         return ReleaseMemoryOccupationReqOutput()
 
     def resume_memory_occupation(self, recv_req: ResumeMemoryOccupationReqInput):
+        # Check if memory saver is enabled before proceeding
+        if not self.server_args.enable_memory_saver:
+            logger.warning(
+                "`resume_memory_occupation` called but memory saver is not enabled. Skipping state import."
+            )
+            return ResumeMemoryOccupationReqOutput()
+
+        # Original logic only runs if memory saver is enabled
         self.memory_saver_adapter.check_validity(caller_name="resume_memory_occupation")
         self.memory_saver_adapter.resume()
+
+        # Check if the stashed state exists before trying to import and delete it
+        if not hasattr(self, "stashed_model_static_state"):
+             logger.error(
+                 "`resume_memory_occupation` called, memory saver is enabled, but 'stashed_model_static_state' is missing. This indicates a logic error or state synchronization issue."
+             )
+             # Depending on desired behavior, you might raise an error or return a failure response.
+             # For now, just log the error and return.
+             return ResumeMemoryOccupationReqOutput() # Or indicate failure somehow
+
         _import_static_state(
             self.tp_worker.worker.model_runner.model, self.stashed_model_static_state
         )
         del self.stashed_model_static_state
         return ResumeMemoryOccupationReqOutput()
+
+
+    def resume_memory_occupation(self, recv_req: ResumeMemoryOccupationReqInput):
+        # Check if memory saver is enabled before proceeding
+        if not self.server_args.enable_memory_saver:
+            logger.warning(
+                "`resume_memory_occupation` called but memory saver is not enabled. Skipping state import."
+            )
+            return ResumeMemoryOccupationReqOutput()
+
+        # Original logic only runs if memory saver is enabled
+        self.memory_saver_adapter.check_validity(caller_name="resume_memory_occupation")
+        self.memory_saver_adapter.resume()
+
+        # Check if the stashed state exists before trying to import and delete it
+        if not hasattr(self, "stashed_model_static_state"):
+             logger.error(
+                 "`resume_memory_occupation` called, memory saver is enabled, but 'stashed_model_static_state' is missing. This indicates a logic error or state synchronization issue."
+             )
+             # Depending on desired behavior, you might raise an error or return a failure response.
+             # For now, just log the error and return.
+             return ResumeMemoryOccupationReqOutput() # Or indicate failure somehow
+
+        _import_static_state(
+            self.tp_worker.worker.model_runner.model, self.stashed_model_static_state
+        )
+        del self.stashed_model_static_state
+        return ResumeMemoryOccupationReqOutput()
+
 
     def profile(self, recv_req: ProfileReq):
         if recv_req.type == ProfileReqType.START_PROFILE:
